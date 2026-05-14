@@ -55,7 +55,8 @@ def startup():
     _seed_demo_data()
 
 def _seed_demo_data():
-    """Create a demo admin + student if DB is empty."""
+    """Create demo admin + student if DB is empty. Uses separate transactions
+    so a failing exam insert never rolls back the user accounts."""
     from app.database import SessionLocal
     from app.models.user import User, UserRole
     from app.utils.jwt_handler import hash_password
@@ -63,6 +64,9 @@ def _seed_demo_data():
     from app.models.exam import Exam, ExamStatus
 
     db = SessionLocal()
+
+    # ── Step 1: Seed users (own transaction) ─────────────────────────────────
+    admin_id = None
     try:
         if db.query(User).count() == 0:
             admin = User(
@@ -79,9 +83,31 @@ def _seed_demo_data():
                 role=UserRole.STUDENT,
             )
             db.add_all([admin, student])
-            db.flush()
+            db.commit()          # ← commit users immediately, independently
+            db.refresh(admin)
+            admin_id = admin.id
+            logging.info("✅ Demo users seeded: admin@proctor.com / admin123  |  student@proctor.com / student123")
+        else:
+            # DB already has users — grab admin id for exam seed check
+            existing_admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+            if existing_admin:
+                admin_id = existing_admin.id
+            logging.info("ℹ️  Users already exist, skipping user seed.")
+    except Exception as e:
+        logging.error(f"❌ User seed error: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
-            # Demo exam
+    # ── Step 2: Seed demo exam (separate session + transaction) ───────────────
+    if not admin_id:
+        logging.warning("⚠️  Skipping exam seed — no admin user found.")
+        return
+
+    db2 = SessionLocal()
+    try:
+        from app.models.exam import Exam, ExamStatus
+        if db2.query(Exam).count() == 0:
             now = datetime.utcnow()
             exam = Exam(
                 title="Demo Computer Science Exam",
@@ -90,7 +116,7 @@ def _seed_demo_data():
                 start_time=now,
                 end_time=now + timedelta(hours=2),
                 status=ExamStatus.ACTIVE,
-                created_by=admin.id,
+                created_by=admin_id,
                 max_alerts=10,
                 questions=[
                     {"id": 1, "text": "What is Big O notation?", "type": "text", "marks": 10},
@@ -103,14 +129,16 @@ def _seed_demo_data():
                      "answer": "Structured Query Language", "marks": 5},
                 ]
             )
-            db.add(exam)
-            db.commit()
-            logging.info("Demo data seeded: admin@proctor.com / admin123  |  student@proctor.com / student123")
+            db2.add(exam)
+            db2.commit()
+            logging.info("✅ Demo exam seeded successfully.")
+        else:
+            logging.info("ℹ️  Exams already exist, skipping exam seed.")
     except Exception as e:
-        logging.error(f"Seed error: {e}")
-        db.rollback()
+        logging.error(f"❌ Exam seed error: {e}")
+        db2.rollback()
     finally:
-        db.close()
+        db2.close()
 
 @app.get("/")
 def root():
