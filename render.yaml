@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: exam-proctoring-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite:///./proctoring.db
+      - key: FRONTEND_URL
+        sync: false   # set manually in Render dashboard
+      - key: DEBUG
+        value: "false"
+    healthCheckPath: /health
+    autoDeploy: true
