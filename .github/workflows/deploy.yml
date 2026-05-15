@@ -65,20 +65,40 @@ jobs:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_WS_URL: ${{ secrets.VITE_WS_URL }}
 
-  # ── Deploy Backend to Render ──────────────────────────────────────────────
+  # ── Deploy Backend to Hugging Face Space ──────────────────────────────────
   deploy-backend:
-    name: Deploy Backend (Render)
+    name: Deploy Backend (Hugging Face)
     needs: backend-test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - name: Trigger Render deploy
-        run: |
-          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-        # Get this URL from Render dashboard → Settings → Deploy Hooks
+      - uses: actions/checkout@v4
 
-  # ── Deploy Frontend to Vercel ─────────────────────────────────────────────
+      - name: Push backend to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config --global user.email "ci@github.com"
+          git config --global user.name "GitHub Actions"
+
+          # Clone HF Space repo
+          git clone https://salmanoffical35:$HF_TOKEN@huggingface.co/spaces/salmanoffical35/exam-proctoring-api hf_space
+
+          # Sync backend files to HF Space (keep HF-specific files)
+          rsync -av --exclude='.git' backend/ hf_space/
+
+          # Commit and push if anything changed
+          cd hf_space
+          git add .
+          git diff --staged --quiet || git commit -m "Deploy: ${{ github.sha }}"
+          git push
+        # Add HF_TOKEN secret in GitHub:
+        # Settings → Secrets → Actions → New secret
+        # Name: HF_TOKEN
+        # Value: your Hugging Face token (hf_xxxx)
+
+  # ── Deploy Frontend (Vercel auto-deploys via GitHub integration) ──────────
   deploy-frontend:
     name: Deploy Frontend (Vercel)
     needs: frontend-build
@@ -86,14 +106,8 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Vercel CLI
-        run: npm install -g vercel
-
-      - name: Deploy to Vercel
+      - name: Vercel auto-deploy confirmation
         run: |
-          cd frontend
-          vercel --prod --token=${{ secrets.VERCEL_TOKEN }} \
-            --env VITE_API_URL=${{ secrets.VITE_API_URL }} \
-            --env VITE_WS_URL=${{ secrets.VITE_WS_URL }}
+          echo "✅ Vercel detects GitHub push automatically."
+          echo "✅ Frontend will be deployed by Vercel's GitHub integration."
+          echo "✅ No manual action needed."
