@@ -114,7 +114,7 @@ def _seed_demo_data():
                 description="Sample exam for testing the proctoring system",
                 duration_minutes=60,
                 start_time=now,
-                end_time=now + timedelta(hours=2),
+                end_time=now + timedelta(days=30),
                 status=ExamStatus.ACTIVE,
                 created_by=admin_id,
                 max_alerts=10,
