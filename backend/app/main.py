@@ -34,7 +34,8 @@ app.add_middleware(
     settings.FRONTEND_URL,
     "https://proctoring-online.netlify.app",
     "https://exam-proctoring-nine.vercel.app",
-    "http://localhost:5173"
+    "http://localhost:5173",
+"http://localhost:3000"
 ],
     allow_credentials=True,
     allow_methods=["*"],
